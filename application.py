@@ -5,8 +5,7 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import LSTM, Dense, Dropout
-from flask import Flask, request, jsonify
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 import psutil
 import time
 from prometheus_client import generate_latest, Gauge, Counter, Histogram, start_http_server, CONTENT_TYPE_LATEST, CollectorRegistry
@@ -196,37 +195,22 @@ class Preditiva(Resource):
                     return {"error": "Os campos 'codigo_acao' , 'data_inicial', 'data_final' e 'dias_futuros_previsao' são obrigatórios."}, 400
 
                 return predicao (codigo_acao,data_inicial, data_final, dias_futuros_previsao)
-                               
-
-def convert_metrics_to_json():   
-    metrics_text = generate_latest(registry).decode('utf-8')
-    metrics_json = {}
-
-    # Processar as métricas linha por linha
-    for line in metrics_text.split('\n'):
-        if not line or line.startswith('#'):  # Ignorar linhas de comentários e vazias
-            continue
-
-        # Dividir a linha por espaços e obter nome e valor da métrica
-        parts = line.split(' ')
-        if len(parts) == 2:  # Garantir que há apenas nome e valor
-            metric_name, metric_value = parts
-            metrics_json[metric_name] = float(metric_value)  # Converter valor para float
-
-    return metrics_json
+                        
 
 @api.route("/metricas/")
 @api.doc(description="Retorna as metricas de monitoramento baseado no Prometeus")
 class Monitoramento(Resource):        
         def get(self):                  
-                metrics = convert_metrics_to_json()
-                
-                return jsonify(metrics)
+                return Response(generate_latest(registry), content_type=CONTENT_TYPE_LATEST)
+                # retornando conforme retorno do prometeus
 
 
-if __name__ == '__main__':    
+if __name__ == '__main__':        
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
 
     # Iniciar o Prometheus em uma porta separada da aplicação Principal
-    start_http_server(8001) 
+    #start_http_server(8001) 
+    # Removido por incompatibilidade com o Heroku.
 
     

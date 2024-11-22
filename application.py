@@ -197,10 +197,10 @@ class Preditiva(Resource):
                 return predicao (codigo_acao,data_inicial, data_final, dias_futuros_previsao)
                         
 
-@api.route("/metricas/", methods=['POST'])
-@api.doc(description="Retorna as metricas de monitoramento baseado no Prometeus (em POST)")
+@api.route("/metricas")
+@api.doc(description="Retorna as metricas de monitoramento baseado no Prometeus (em GET)")
 class Monitoramento(Resource):        
-        def post(self):                  
+        def get(self):                  
                 return Response(generate_latest(registry), content_type=CONTENT_TYPE_LATEST)
                 # retornando conforme retorno do prometeus
 

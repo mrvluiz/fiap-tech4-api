@@ -209,6 +209,10 @@ class Monitoramento(Resource):
 def metrics():   
     return Response(generate_latest(), content_type=CONTENT_TYPE_LATEST)
 
+@app.route('/prometeus_metrics/')
+def metricsX():   
+    return Response(generate_latest(), content_type=CONTENT_TYPE_LATEST)
+
 if __name__ == '__main__':        
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)

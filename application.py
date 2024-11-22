@@ -197,13 +197,17 @@ class Preditiva(Resource):
                 return predicao (codigo_acao,data_inicial, data_final, dias_futuros_previsao)
                         
 
-@api.route("/metricas")
+@api.route("/metricas/")
 @api.doc(description="Retorna as metricas de monitoramento baseado no Prometeus (em GET)")
 class Monitoramento(Resource):        
         def get(self):                  
                 return Response(generate_latest(registry), content_type=CONTENT_TYPE_LATEST)
                 # retornando conforme retorno do prometeus
 
+
+@app.route('/prometeus_metrics')
+def metrics():   
+    return Response(generate_latest(), content_type=CONTENT_TYPE_LATEST)
 
 if __name__ == '__main__':        
     port = int(os.environ.get("PORT", 5000))

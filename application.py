@@ -10,8 +10,7 @@ import psutil
 import time
 from prometheus_client import generate_latest, Gauge, Counter, Histogram, start_http_server, CONTENT_TYPE_LATEST, CollectorRegistry
 from flask_restx import Api, Resource, fields
-
-
+import requests
 
 # Inicializar o Flask e Prometheus
 app = Flask(__name__)
@@ -22,8 +21,6 @@ api = Api(app,
             description='API para previsibilidade de preços de ações da bolsa',
             default='Principal'
             )
-
-
 
 # métricas do Prometheus 
 registry = CollectorRegistry()
@@ -113,7 +110,6 @@ def avaliar_model(model, X_test, y_test, scaler):
     return mae, rmse, mape
 
 def predicao(codigo_acao,data_inicial, data_final, dias_futuros_previsao ):
-    
     REQUEST_COUNT.inc()  # Incrementar o contador de requisições
     start_time = time.time()
 
@@ -194,31 +190,78 @@ class Preditiva(Resource):
                 if not codigo_acao or not data_inicial or not data_final or not dias_futuros_previsao:
                     return {"error": "Os campos 'codigo_acao' , 'data_inicial', 'data_final' e 'dias_futuros_previsao' são obrigatórios."}, 400
 
-                return predicao (codigo_acao,data_inicial, data_final, dias_futuros_previsao)
+                predicao_retorno = predicao (codigo_acao,data_inicial, data_final, dias_futuros_previsao)
+                send_metrics_to_grafana()
+                return predicao_retorno
                         
 
 @api.route("/metricas/")
-@api.doc(description="Retorna as metricas de monitoramento baseado no Prometeus (em GET)")
+@api.doc(description="Retorna as metricas de monitoramento baseado no Prometeus")
 class Monitoramento(Resource):        
         def get(self):                  
                 return Response(generate_latest(registry), content_type=CONTENT_TYPE_LATEST)
                 # retornando conforme retorno do prometeus
 
+@api.route("/metricas_grafana_action/", methods=['POST'])
+@api.doc(description="Envia as metricas de monitoramento para o Grafana e retorna o status individual de cada métrica")
+class MonitoramentoAction(Resource):        
+        def post(self):                                  
+                grafana_retorno = send_metrics_to_grafana()
+                return jsonify(grafana_retorno)
 
-@app.route('/prometeus_metrics')
-def metrics():   
-    return Response(generate_latest(), content_type=CONTENT_TYPE_LATEST)
 
-@app.route('/prometeus_metrics/')
-def metricsX():   
-    return Response(generate_latest(), content_type=CONTENT_TYPE_LATEST)
+def convert_metrics_to_json():   
+    monitor_resources()
+    metrics_text = generate_latest(registry).decode('utf-8')
+    metrics_json = {}
+    retorno = []
+    # Processar as métricas linha por linha
+    for line in metrics_text.split('\n'):
+        if not line or line.startswith('#'):  # Ignorar linhas de comentários e vazias
+            continue
+        # Dividir a linha por espaços e obter nome e valor da métrica
+        parts = line.split(' ')
+        if len(parts) == 2:  # Garantir que há apenas nome e valor
+            metric_name, metric_value = parts
+            metrics_json[metric_name] = float(metric_value)  # Converter valor para float
+            retorno.append({'metric_name': metric_name, 'metric_value': metric_value})
+
+    return retorno
+
+def send_metrics_to_grafana():            
+        metricas = convert_metrics_to_json()            
+        resultado = []
+        
+        USER_ID = os.getenv("USER_ID")
+        API_KEY = os.getenv("API_KEY")
+        GRAFANA_URL = os.getenv("GRAFANA_URL")
+
+        for metrica in metricas:
+            data_content = f"{metrica['metric_name']},bar_label={metrica['metric_name']},source=fiap metric={metrica['metric_value']}"         
+            
+            try:
+                response = requests.post(GRAFANA_URL, 
+                                        headers = {
+                                        'Content-Type': 'text/plain',
+                                        },
+                                        data = data_content,
+                                        auth = (USER_ID, API_KEY)
+                                        )
+
+                status_code = response.status_code
+                response_text = response.text               
+                        
+            except Exception as e:            
+                    response_text =  response_text + (f"falha no envio: {str(e)}")
+
+            resultado.append({'metric_name' : metrica['metric_name'], 
+                              'metric_value' : metrica['metric_value'], 
+                              'status_code' : status_code, 
+                              'response_text' : response_text
+                              }) 
+        return resultado
+                
 
 if __name__ == '__main__':        
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
-
-    # Iniciar o Prometheus em uma porta separada da aplicação Principal
-    #start_http_server(8001) 
-    # Removido por incompatibilidade com o Heroku.
-
-    
